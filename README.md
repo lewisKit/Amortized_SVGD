@@ -5,8 +5,8 @@ We demonstrate two examples utilizing amortized SVGD in this repository:
 - Variational Autoencoder
 - Langevin Sampler 
 
----
-### Requirements
+
+## Requirements
 - Theano
 - pylearn2 
 - matplotlib
@@ -14,6 +14,6 @@ We demonstrate two examples utilizing amortized SVGD in this repository:
 - tqdm
 
 ---
-### Paper
+## Paper
 
 We would put the paper on Arxiv soon.
