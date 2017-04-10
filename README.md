@@ -4,6 +4,7 @@ Amortized SVGD is a simpler method which can utilized to train black box inferen
 We demonstrate two examples utilizing amortized SVGD in this repository:
 - Variational Autoencoder
 - Langevin Sampler 
+  - bayesian logistic regression
 
 
 ## Requirements
