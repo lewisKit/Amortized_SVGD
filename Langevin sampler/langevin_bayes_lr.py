@@ -1,22 +1,17 @@
 import sys
 sys.path.append('..')
-
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 import random
 import os
 from time import time
 import numpy as np
 from tqdm import tqdm
 from sklearn.externals import joblib
-
 import theano
 import theano.tensor as T
 import scipy.io
-
-
 from lib import activations
 from lib import updates
 from lib import inits
@@ -64,36 +59,11 @@ for i in range(1, 9):
     total_dev.append((floatX(X_dev.toarray()), floatX(y_dev)))
     total_test.append((floatX(X_test.toarray()), floatX(y_test)))
 
-    '''
-    if i == 1:
-        total_dev_X, total_dev_y = floatX(X_dev.toarray()), floatX(y_dev)
-        total_test_X, total_test_y = floatX(X_test.toarray()), floatX(y_test)
-    else:
-
-        total_dev_X = np.concatenate([total_dev_X, floatX(X_dev.toarray())], axis=0)
-        total_dev_y = np.concatenate([total_dev_y, floatX(y_dev)], axis=0)
-
-        total_test_X = np.concatenate([total_test_X, floatX(X_test.toarray())], axis=0)
-        total_test_y = np.concatenate([total_test_y, floatX(y_test)], axis=0)
-    '''
 
 N_train = X_train.shape[0]
 print "size of training=%d" % (N_train)
 
 x_dim = X_train.shape[1]
-
-
-
-desc = 'amortized_bayes_lr'
-model_dir = 'models/%s' % desc
-samples_dir = 'samples/%s' % desc
-
-
-dir_list = [model_dir, samples_dir]
-for dir in dir_list:
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-print desc
 
 
 a0 = 1
@@ -126,11 +96,7 @@ gb3 = bias_ifn((npx,), 'gb3')
 
 
 block_1 = bias_ifn((n_depth, npx), 'block_1')
-#block_2 = bias_ifn((n_depth, npx), 'block_2')
-
-#net_params = [w_h1, gg1, gb1, w_h2, gg2, gb2, w_h3, gg3, gb3, block_1]
 net_params = [w_h1, gg1, gb1, w_h2, gg2, gb2, block_1]
-#net_params = [block_1]
 
 
 def rbf_kernel(X):
@@ -177,7 +143,6 @@ def evaluate(xmb, ymb, theta):
     return acc, llh
 
 
-
 def score_bayes_lr(xmb, ymb, theta, data_N):
     w = theta[:, :-1]
     alpha = T.exp(theta[:, -1])
@@ -199,8 +164,6 @@ def score_bayes_lr(xmb, ymb, theta, data_N):
     return T.concatenate([dw, dalpha.dimshuffle(0, 'x')], axis=1)
 
 
-
-
 def svgd_gradient(xmb, ymb, theta, data_N):
     grad = score_bayes_lr(xmb, ymb, theta, data_N)
     kxy, dxkxy = rbf_kernel(theta)
@@ -210,12 +173,9 @@ def svgd_gradient(xmb, ymb, theta, data_N):
     return grad, svgd_grad
 
 
-#def langevin_network(xmb, ymb, Z, w_h1, gg1, gb1, w_h2, gg2, gb2, w_h3, gg3, gb3, block):
 def langevin_network(xmb, ymb, Z, data_N, w_h1, gg1, gb1, w_h2, gg2, gb2, block):
-#def langevin_network(xmb, ymb, Z, block):
 
     h1 = relu(batchnorm(T.dot(Z, w_h1), g=gg1, b=gb1))
-    #h2 = relu(batchnorm(T.dot(h1, w_h2), g=gg2, b=gb2))
     Z = (batchnorm(T.dot(h1, w_h2), g=gg2, b=gb2))
 
     prior_samples = Z
@@ -223,48 +183,8 @@ def langevin_network(xmb, ymb, Z, data_N, w_h1, gg1, gb1, w_h2, gg2, gb2, block)
     for i in range(n_depth):
         score_x = score_bayes_lr(xmb[i*nbatch:(i+1)*nbatch], ymb[i*nbatch:(i+1)*nbatch], prior_samples, data_N)
         prior_samples = prior_samples + block[i]**2 * score_x / 2. + block[i]**2 * srng.normal(Z.shape)
-        # grad, svgd_grad = svgd_gradient(xmb[i*nbatch:(i+1)*nbatch], ymb[i*nbatch:(i+1)*nbatch], prior_samples, data_N)
-        # prior_samples = prior_samples + (block[i] ** 2) * svgd_grad
-
 
     return prior_samples
-
-
-X = T.fmatrix()
-y = T.fvector()
-
-theta = T.fmatrix()
-deltaX = T.fmatrix() # svgd gradient
-data_N = T.scalar('data_N')
-
-block = T.fmatrix()
-
-
-gX_1 = langevin_network(X, y, theta, data_N, *net_params)
-#gX_2 = langevin_network(X, y, theta, block_2)
-cost_1 = -1 * T.mean(T.sum(gX_1 * deltaX, axis=1))
-#cost_2 = -1 * T.mean(T.sum(gX_2 * deltaX, axis=1))
-
-
-lrt = sharedX(lr)
-g_updater_1 = updates.Adagrad(lr=lr, regularizer=updates.Regularizer(l2=l2))
-g_updates_1 = g_updater_1(net_params, cost_1)
-
-#g_updater_2 = updates.Adagrad(lr=lr, regularizer=updates.Regularizer(l2=l2))
-#g_updates_2 = g_updater_2([block_2], cost_2)
-
-
-print 'COMPILING'
-t = time()
-_gen_1 = theano.function([X, y, theta, data_N], gX_1)
-#_gen_2 = theano.function([X, y, theta], gX_2)
-_train_g_1 = theano.function([X, y, theta, deltaX, data_N], cost_1, updates=g_updates_1)
-#_train_g_2 = theano.function([X, y, theta, deltaX], cost_2, updates=g_updates_2)
-_svgd_gradient = theano.function([X, y, theta, data_N], svgd_gradient(X, y, theta, data_N))
-_score_bayes_lr = theano.function([X, y, theta, data_N], score_bayes_lr(X, y, theta, data_N))
-# _logp_kernel = theano.function([X, y, theta], logp_kernel(X, y, theta))
-_evaluate = theano.function([X, y, theta], evaluate(X, y, theta))
-print '%.2f seconds to compile theano functions'%(time()-t)
 
 
 def init_theta(a =1, b0=0.1, n_particle=20):
@@ -275,7 +195,6 @@ def init_theta(a =1, b0=0.1, n_particle=20):
                 size=(n_particle, x_dim)), alpha0], axis=1)
 
     return theta0.astype(theano.config.floatX)
-
 
 def _make_svgd_step(theta, lr=1e-2):
 
@@ -323,32 +242,41 @@ def _chunck_eval(X_test, y_test, theta0):
 
 
 
+X = T.fmatrix()
+y = T.fvector()
+
+theta = T.fmatrix()
+deltaX = T.fmatrix() # svgd gradient
+data_N = T.scalar('data_N')
+
+block = T.fmatrix()
+
+
+gX_1 = langevin_network(X, y, theta, data_N, *net_params)
+cost_1 = -1 * T.mean(T.sum(gX_1 * deltaX, axis=1))
+
+
+lrt = sharedX(lr)
+g_updater_1 = updates.Adagrad(lr=lr, regularizer=updates.Regularizer(l2=l2))
+g_updates_1 = g_updater_1(net_params, cost_1)
+
+
+print 'COMPILING'
+t = time()
+_gen_1 = theano.function([X, y, theta, data_N], gX_1)
+_train_g_1 = theano.function([X, y, theta, deltaX, data_N], cost_1, updates=g_updates_1)
+_svgd_gradient = theano.function([X, y, theta, data_N], svgd_gradient(X, y, theta, data_N))
+_score_bayes_lr = theano.function([X, y, theta, data_N], score_bayes_lr(X, y, theta, data_N))
+_evaluate = theano.function([X, y, theta], evaluate(X, y, theta))
+print '%.2f seconds to compile theano functions'%(time()-t)
+
 
 n_iter = 10000
 n_particle = 100
-# stochastic langevin
-
-'''
-for k in range(0, 15):
-    lr = 1e-6 * (2 ** k)
-
-    # langevin
-    x0 = init_theta(n_particle = n_particle)
-    x0 = sharedX(x0)
-    _lgvn_step = _make_langevin_step(x0, lr)
-    for i in tqdm(range(n_iter)):
-        imb = np.asarray([t % ntrain for t in range(i*nbatch, (i+1)*nbatch)]).astype('int32')
-        _lgvn_step(X_train[imb], y_train[imb], i)
-
-    print "k=%d, learning_rate=%f" %(k, lr)
-    _chunck_eval(x0.get_value())
-'''
-
-
 
 # first training the network
-
-# langevin network
+print "Start Training Langevin Sampler"
+# langevin sampler
 for iter in tqdm(range(1, n_iter+1)):
     ntrain = X_train.shape[0]
 
@@ -356,78 +284,12 @@ for iter in tqdm(range(1, n_iter+1)):
     xmb, ymb = floatX(X_train[imb]), floatX(y_train[imb])
 
     theta0 = init_theta(n_particle = n_particle)
-    #theta0 = floatX(np_rng.normal(0,.1,size=(n_particle,npx)))
-    #theta0 = floatX(x0.get_value())
 
     b1_samples = floatX(_gen_1(xmb, ymb, theta0, ntrain))
     grad, svgd_grad = _svgd_gradient(xmb, ymb, b1_samples, ntrain)
     _train_g_1(xmb, ymb, theta0, svgd_grad, ntrain)
-    #_train_g_1(xmb, ymb, theta0, floatX(grad))
-
-    # if iter % 100 == 0:
-
-    #     imb_dev = np.asarray([t % ndev for t in range(iter*n_depth*nbatch, (iter + 1)*n_depth*nbatch)]).astype('int32')
-    #     xmb_dev, ymb_dev = floatX(X_dev[imb_dev]), floatX(y_dev[imb_dev])
-    #     xmb_dev, ymb_dev = shuffle(xmb_dev, ymb_dev)
-    #     valid_theta = init_theta(n_particle = n_particle)
-    #     samples = floatX(_gen_1(xmb_dev, ymb_dev, valid_theta))
-    #     rmse, ll = _evaluate(X_test, y_test, samples)
-    #     print rmse, ll
 
 
-'''
-print "tunning stepsize"
-# svgd:
-print "tunning svgd"
-for k in range(0, 20):
-    lr = 1e-6 * (2 ** k)
-    print "k=%d, learning_rate=%f" %(k, lr)
-    for data_i in range(0, 8):
-        # For each dataset training on dev and testing on test dataset
-        X_dev, y_dev = total_dev[data_i]
-        X_test, y_test = total_test[data_i]
-        dev_N = X_dev.shape[0]
-        X_dev, y_dev = shuffle(X_dev, y_dev)
-
-        ### svgd
-        x0 = init_theta(n_particle=n_particle)
-        x0 = sharedX(x0)
-        _svgd_step = _make_svgd_step(x0, lr=lr)
-        for i in tqdm(range(n_iter)):
-            imb = [t % dev_N for t in range(i*nbatch, (i+1)*nbatch)]
-            _svgd_step(X_dev[imb], y_dev[imb], dev_N)
-
-        svgd_rmse, svgd_ll =_evaluate(X_test, y_test, x0.get_value())
-        print "dataset, ", data_i, svgd_rmse, svgd_ll
-    print "\n\n"
-
-print "tunning langevin--------"
-
-for k in range(0, 20):
-    lr = 1e-6 * (2 ** k)
-    print "k=%d, learning_rate=%f" % (k, lr)
-
-    for data_i in range(0, 8):
-        # For each dataset training on dev and testing on test dataset
-        X_dev, y_dev = total_dev[data_i]
-        X_test, y_test = total_test[data_i]
-        dev_N = X_dev.shape[0]
-        X_dev, y_dev = shuffle(X_dev, y_dev)
-
-        ### langevin
-        x0 = init_theta(n_particle=n_particle)
-        x0 = sharedX(x0)
-        _lgvn_step = _make_langevin_step(x0, lr=lr)
-        for i in tqdm(range(n_iter)):
-            imb = np.asarray([t % dev_N for t in range(i*nbatch, (i+1)*nbatch)]).astype('int32')
-            _lgvn_step(X_dev[imb], y_dev[imb], i, dev_N)
-
-        lv_rmse, lv_ll = _evaluate(X_test, y_test, x0.get_value())
-        print "dataset", data_i, lv_rmse, lv_ll
-    print "\n\n"
-
-print "finishing searching"
-'''
 
 total_svgd_acc = []
 total_svgd_ll = []
@@ -435,21 +297,10 @@ total_svgd_ll = []
 total_langevin_acc = []
 total_langevin_ll = []
 
-total_langevin_10_acc = []
-total_langevin_100_acc = []
-total_langevin_1000_acc = []
-
-total_langevin_10_ll = []
-total_langevin_100_ll = []
-total_langevin_1000_ll = []
-
-
 total_m_acc = []
 total_m_ll = []
 
-print "value of blocks", block_1.get_value()
-
-print "training separete data set"
+print "Start testing on separete data set"
 for data_i in range(0, 8):
     # For each dataset training on dev and testing on test dataset
 
@@ -457,10 +308,7 @@ for data_i in range(0, 8):
     X_test, y_test = total_test[data_i]
     dev_N = X_dev.shape[0]
     X_dev, y_dev = shuffle(X_dev, y_dev)
-    '''
-    X_dev, y_dev = total_dev_X, total_dev_y
-    X_test, y_test = total_test_X, total_test_y
-    '''
+
     X_dev, y_dev = shuffle(X_dev, y_dev)
     X_test, y_test = shuffle(X_test, y_test)
     dev_N = X_dev.shape[0]
@@ -485,28 +333,14 @@ for data_i in range(0, 8):
     for i in tqdm(range(n_iter)):
         imb = np.asarray([t % dev_N for t in range(i*nbatch, (i+1)*nbatch)]).astype('int32')
         _lgvn_step(X_dev[imb], y_dev[imb], i, dev_N)
-        '''
-        if i == 10:
-            lv_rmse, lv_ll = _chunck_eval(X_test, y_test, x0.get_value())
-            total_langevin_10_acc.append(lv_rmse)
-            total_langevin_10_ll.append(lv_ll)
-        if i == 100:
-            lv_rmse, lv_ll = _chunck_eval(X_test, y_test, x0.get_value())
-            total_langevin_100_acc.append(lv_rmse)
-            total_langevin_100_ll.append(lv_ll)
 
-        if i == 1000:
-            lv_rmse, lv_ll = _chunck_eval(X_test, y_test, x0.get_value())
-            total_langevin_1000_acc.append(lv_rmse)
-            total_langevin_1000_ll.append(lv_ll)
-        '''
 
     lv_rmse, lv_ll = _chunck_eval(X_test, y_test, x0.get_value())
     total_langevin_acc.append(lv_rmse)
     total_langevin_ll.append(lv_ll)
 
 
-    # langevin network
+    # langevin sampler
     imb_dev = np.random.choice(dev_N, min(n_depth * nbatch, dev_N), replace=False)
     xmb_dev, ymb_dev = floatX(X_dev[imb_dev]), floatX(y_dev[imb_dev])
     xmb_dev, ymb_dev = shuffle(xmb_dev, ymb_dev)
@@ -517,216 +351,25 @@ for data_i in range(0, 8):
     total_m_ll.append(ll)
 
 
-    print "Evaluation of experiment=%d" %(data_i)
+    print "Evaluation of dataset=%d" %(data_i)
     print "Evaluation of svgd, ", svgd_rmse, svgd_ll
     print "Evaluation of langevin", lv_rmse, lv_ll
     print "Evaluation of our methods, ", rmse, ll
-    print "\n\n"
+    print "\n"
 
 
-
-
-
-print "final results"
-
-print "SGD-----"
+print "Final results"
+print "\nSGD-----"
 print "SVGD acc", np.mean(total_svgd_acc), np.std(total_svgd_acc)
 print "SVGD llh", np.mean(total_svgd_ll), np.std(total_svgd_ll)
 
-print "langevin 10---"
-print "langevin 10 acc", np.mean(total_langevin_10_acc), np.std(total_langevin_10_acc)
-print "langevin 10 llh", np.mean(total_langevin_10_ll), np.std(total_langevin_10_ll)
 
-
-print "langevin 100---"
-print "langevin 100 acc", np.mean(total_langevin_100_acc), np.std(total_langevin_100_acc)
-print "langevin 100 llh", np.mean(total_langevin_100_ll), np.std(total_langevin_100_ll)
-
-
-print "langevin 1000---"
-print "langevin 1000 acc", np.mean(total_langevin_1000_acc), np.std(total_langevin_1000_acc)
-print "langevin 1000 llh", np.mean(total_langevin_1000_ll), np.std(total_langevin_1000_ll)
-
-print "Converged Langevin---"
+print "\nConverged Langevin---"
 print "langevin acc", np.mean(total_langevin_acc), np.std(total_langevin_acc)
 print "langevin llh", np.mean(total_langevin_ll), np.std(total_langevin_ll)
 
 
-print "Our methods----"
+print "\nOur methods----"
 print "our acc", np.mean(total_m_acc), np.std(total_m_acc)
 print "our ll", np.mean(total_m_ll), np.std(total_m_ll)
-
-
-
-
-'''
-    for t in tqdm(range(10)):
-        imb = np.asarray([t % ndev for t in range(i*nbatch, (i+1)*nbatch)]).astype('int32')
-        _lgvn_step(X_dev[imb], y_dev[imb], t)
-
-    _chunck_eval(x0.get_value())
-
-    # converge
-    for i in tqdm(range(1000)):
-        imb = np.asarray([t % ndev for t in range(i*nbatch, (i+1)*nbatch)]).astype('int32')
-        _lgvn_step(X_dev[imb], y_dev[imb], i)
-
-    _chunck_eval(x0.get_value())
-    '''
-
-
-    #b2_samples = floatX(_gen_2(xmb, ymb, b1_samples))
-    #grad, svgd_grad = _svgd_gradient(xmb, ymb, b2_samples)
-    #_train_g_2(xmb, ymb, b1_samples, floatX(svgd_grad))
-
-    #stepsize = 1e-4 * (1 + iter) ** (-0.55)
-    #pred, grad = _score_nn(xmb, ymb, theta0)
-    #update  = stepsize * grad / 2. + np.sqrt(stepsize) * np.random.normal(0, 1, grad.shape)
-    #theta0 = theta0 + floatX(update)
-
-
-svgd_x0 = init_theta(n_particle=n_particle)
-svgd_x0 = sharedX(svgd_x0)
-_svgd_step = _make_svgd_step(svgd_x0)
-
-langevin_x0 = sharedX(init_theta(n_particle=n_particle))
-_lgvn_step = _make_langevin_step(langevin_x0)
-
-
-
-
-svgd_x0 = init_theta(n_particle=n_particle)
-svgd_x0 = sharedX(svgd_x0)
-_svgd_step = _make_svgd_step(svgd_x0)
-
-langevin_x0 = sharedX(init_theta(n_particle=n_particle))
-_lgvn_step = _make_langevin_step(langevin_x0)
-
-
-days = 10
-
-'''
-for day in range(0, days):
-    # first generate data
-    cur_indics = [t % total_X_train.shape[0] for t in range(day * data_X_N, (day + 1) * data_X_N)]
-
-
-    X_train ,y_train = total_X_train[cur_indics], total_y_train[cur_indics]
-
-    # X_train, X_test, y_train, y_test = train_test_split(X_input[cur_indics], y_input[cur_indics], test_size=0.5)
-    X_train, y_train = shuffle(X_train, y_train)
-    # normalization
-    X_train = (X_train - mean_X_train) / std_X_train
-    # X_test = (X_test - mean_X_train) / std_X_train
-    y_train = (y_train - mean_y_train) / std_y_train
-    ntrain = X_train.shape[0]
-
-
-    svgd_x0_noi = sharedX(init_theta(n_particle=n_particle))
-    _svgd_step_noi = _make_svgd_step(svgd_x0_noi)
-
-    langevin_x0_noi = sharedX(init_theta(n_particle=n_particle))
-    _lgvn_step_noi = _make_langevin_step(langevin_x0_noi)
-
-
-
-    # langevin network
-    for iter in tqdm(range(1, n_iter+1)):
-
-        imb = np.asarray([t % ntrain for t in range(iter*n_depth*nbatch, (iter+1)*n_depth*nbatch)]).astype('int32')
-        xmb, ymb = X_train[imb], y_train[imb]
-
-        theta0 = init_theta(n_particle = n_particle)
-        #theta0 = floatX(np_rng.normal(0,.1,size=(n_particle,npx)))
-        #theta0 = floatX(x0.get_value())
-
-        b1_samples = floatX(_gen_1(xmb, ymb, theta0))
-        grad, svgd_grad = _svgd_gradient(xmb, ymb, b1_samples)
-        _train_g_1(xmb, ymb, theta0, floatX(svgd_grad))
-        #_train_g_1(xmb, ymb, theta0, floatX(grad))
-
-        # svgd training
-        _svgd_step(xmb, ymb)
-
-        # langevin training
-        _lgvn_step(xmb, ymb, day * (n_iter) + iter)
-
-        # no initial training
-        _svgd_step_noi(xmb, ymb)
-
-        # no initial langevin training
-        _lgvn_step_noi(xmb, ymb, iter)
-
-
-
-    rmse, ll = _evaluate(X_test, y_test, b1_samples)
-    print 'Langevin Networks ', rmse, ll
-    nn_rmse.append(float(rmse))
-    nn_ll.append(float(ll))
-
-    rmse, ll = _evaluate(X_test, y_test, svgd_x0.get_value())
-    print "SVGD, ", rmse, ll
-    svgd_rmse.append(float(rmse))
-    svgd_ll.append(float(ll))
-
-    rmse, ll = _evaluate(X_test, y_test, langevin_x0.get_value())
-    print "langevin, ", rmse, ll
-    langevin_rmse.append(float(rmse))
-    langevin_ll.append(float(ll))
-
-    # no initial version
-
-    rmse, ll = _evaluate(X_test, y_test, svgd_x0_noi.get_value())
-    print "SVGD not initial, ", rmse, ll
-    svgd_no_rmse.append(float(rmse))
-    svgd_no_ll.append(float(ll))
-
-    rmse, ll = _evaluate(X_test, y_test, langevin_x0_noi.get_value())
-    print "langevin not initial, ", rmse, ll
-    langevin_no_rmse.append(float(rmse))
-    langevin_no_ll.append(float(ll))
-
-
-
-        #b2_samples = floatX(_gen_2(xmb, ymb, b1_samples))
-        #grad, svgd_grad = _svgd_gradient(xmb, ymb, b2_samples)
-        #_train_g_2(xmb, ymb, b1_samples, floatX(svgd_grad))
-
-        #stepsize = 1e-4 * (1 + iter) ** (-0.55)
-        #pred, grad = _score_nn(xmb, ymb, theta0)
-        #update  = stepsize * grad / 2. + np.sqrt(stepsize) * np.random.normal(0, 1, grad.shape)
-        #theta0 = theta0 + floatX(update)
-
-print "nn evaluation"
-print nn_rmse
-print nn_ll
-print '\n'
-
-print "svgd evaluation"
-print svgd_rmse
-print svgd_ll
-print '\n'
-
-print "langevin evaluate"
-print langevin_rmse
-print langevin_ll
-print '\n'
-
-print "svgd evaluation without previous initalization"
-print svgd_no_rmse
-print svgd_no_ll
-print '\n'
-
-print "langevin evaluation without previous initliazation"
-print langevin_no_rmse
-print langevin_no_ll
-print '\n'
-'''
-
-
-
-#rmse, ll = _evaluate(X_test, y_test, b2_samples)
-#print rmse, ll
-
-
 

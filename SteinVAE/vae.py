@@ -1,6 +1,5 @@
 import sys
 sys.path.append('..')
-
 import os
 import json
 from time import time
@@ -9,11 +8,10 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 from sklearn.externals import joblib
 import urllib
-
 import theano
 import theano.tensor as T
 from theano.sandbox.cuda.dnn import dnn_conv
-
+from utils import *
 from lib import activations
 from lib import updates
 from lib import inits
@@ -32,45 +30,14 @@ def inverse_transform(X):
     X = X.reshape(-1, npx, npx)
     return X
 
-desc = 'vae_conv_test3'
+desc = 'vae_conv'
 model_dir = 'models/%s'%desc
-samples_dir = 'samples/%s'%desc
+samples_dir = 'images/%s'%desc
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 if not os.path.exists(samples_dir):
     os.makedirs(samples_dir)
 
-
-import tempfile
-def mnist(datasets_dir='/TMP/'):
-    URL_MAP = {
-    "train": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_train.amat",
-    "valid": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_valid.amat",
-    "test": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_test.amat"
-    }
-
-    PATH_MAP = {
-    "train": os.path.join(tempfile.gettempdir(), "binarized_mnist_train.npy"),
-    "valid": os.path.join(tempfile.gettempdir(), "binarized_mnist_valid.npy"),
-    "test": os.path.join(tempfile.gettempdir(), "binarized_mnist_test.npy")
-    }
-    for name, url in URL_MAP.items():
-        local_path = PATH_MAP[name]
-        if not os.path.exists(local_path):
-            np.save(local_path, np.loadtxt(urllib.urlretrieve(url)[0]))
-
-    train_set = [x for x in np.load(PATH_MAP['train'])]
-    valid_set = [x for x in np.load(PATH_MAP['valid'])]
-    test_set =  [x for x in np.load(PATH_MAP['test'])]
-
-    x_train = np.array(train_set).astype(np.float32)
-    x_train = x_train.reshape(x_train.shape[0], 1, 28, 28)
-    x_valid = np.array(valid_set).astype(np.float32)
-    x_valid = x_valid.reshape(x_valid.shape[0], 1, 28, 28)
-    x_test = np.array(test_set).astype(np.float32)
-    x_test = x_test.reshape(x_test.shape[0], 1, 28, 28)
-
-    return x_train, x_valid, x_test
 
 
 k = 1             # # of discrim updates for each gen update
@@ -353,16 +320,5 @@ for epoch in range(1, niter+niter_decay+1):
     if epoch == 1 or epoch % 50 == 0:
         print epoch, 'LL', cal_margin()
 
-        joblib.dump([p.get_value() for p in enc_params], 'models/%s/%d_gen_params.jl'%(desc, n_epochs))
-        joblib.dump([p.get_value() for p in dec_params], 'models/%s/%d_discrim_params.jl'%(desc, n_epochs))
-
-
-
-
-
-
-
-
-
-
-
+        joblib.dump([p.get_value() for p in enc_params], 'models/%s/%d_gen_params.jl'%(desc, epoch))
+        joblib.dump([p.get_value() for p in dec_params], 'models/%s/%d_discrim_params.jl'%(desc, epoch))

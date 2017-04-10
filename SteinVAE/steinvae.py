@@ -1,18 +1,16 @@
 import sys
 sys.path.append('..')
-
 from time import time
 import numpy as np
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from sklearn.externals import joblib
 from utils import *
-from svgd import *
+from lib.svgd import *
 import shutil
 import theano
 import theano.tensor as T
 from theano.sandbox.cuda.dnn import dnn_conv
-
 from lib import activations
 from lib import updates
 from lib import inits
@@ -31,7 +29,7 @@ def inverse_transform(X):
     X = X.reshape(-1, npx, npx)
     return X
 
-desc = 'steinvae_conv_35'
+desc = 'steinvae_conv'
 model_dir = 'models/%s'%desc
 images_dir = 'images/%s'%desc
 if not os.path.exists(model_dir):
@@ -73,8 +71,6 @@ bce = T.nnet.binary_crossentropy
 
 gifn = inits.Normal(scale=0.02)
 difn = inits.Normal(scale=0.02)
-#gifn = inits.Uniform(scale=0.05)
-#difn = inits.Uniform(scale=0.05)
 bias_ifn = inits.Constant(c=0.)
 
 
@@ -98,10 +94,7 @@ dw3 = difn((ndf*2, ndf*2, 5, 5), 'dw3')
 dw4 = difn((ndf, ndf*2, 5, 5), 'dw4')
 dw5 = difn((nc, ndf, 5, 5), 'dw5')
 
-# enc_params = [ew1, ew2, ew3, ew4, eb4, ew_mu, eb_mu, ew_sig, eb_sig]
-# dec_params = [dw1, db1, dw2, db2, dw3, dw4, dw5]
 
-#enc_params = [ew1, ew2, ew4, eb4, ew_mu, eb_mu, ew_sig, eb_sig]
 enc_params = [ew1, ew2, ew4, eb4, ew_mu, eb_mu]
 dec_params = [dw1, db1, dw2, db2, dw4, dw5]
 
@@ -166,10 +159,7 @@ def conv_encoder(X, w1, w2, w4, b4, w_mu, b_mu):
     h1 = dropout(h1, 0.3)
     h2 = conv_and_pool(h1, w2, s=2)
     h2 = dropout(h2, 0.3)
-    # h3 = conv(h2, w3, s=2)
-    #h1 = relu((dnn_conv(X, w1, subsample=(1, 1), border_mode=(1, 1))))
-    #h2 = relu((dnn_conv(h1, w2, subsample=(2, 2), border_mode=(2, 2))))
-    #h3 = relu((dnn_conv(h2, w3, subsample=(2, 2), border_mode=(2, 2))))
+
     h3 = T.flatten(h2, 2)
     h4 = tanh((T.dot(h3, w4) + b4))
     h4 = dropout(h4, 0.3)
@@ -182,10 +172,7 @@ def conv_decoder(X, Z, w1, b1, w2, b2, w4, wx):
     h1 = relu((T.dot(Z, w1)+b1))
     h2 = relu((T.dot(h1, w2)+b2))
     h2 = h2.reshape((h2.shape[0], ngf*2, 7, 7))
-    #h3 = relu((deconv(h2, w3, subsample=(2, 2), border_mode=(2, 2))))
-    #h4 = relu((deconv(h3, w4, subsample=(2, 2), border_mode=(2, 2))))
-    #reconstructed_x = sigmoid(deconv(h4, wx, subsample=(1, 1), border_mode=(1, 1)))
-    # h3 = deconv(h2, w3, s=2)
+
     h4 = deconv_and_depool(h2, w4, s=2, activation=T.nnet.relu)
     reconstructed_x = deconv_and_depool(h4, wx, s=2, activation=T.nnet.sigmoid)
 
@@ -201,8 +188,7 @@ def _vgd_gradient(z, num_z, logpxz):
     dz_logpzx = T.grad(T.sum(logpxz), z) - z
     tensor_grad_z = T.reshape(dz_logpzx, (-1, num_z, nz))
 
-
-    # vgd_grad_tensor = (T.batched_dot(Kxy, tensor_grad_z) + dxkxy) / T.cast(num_z, 'float32')
+    # notice we multiply 100 on dxkxy
     vgd_grad_tensor = (T.batched_dot(Kxy, tensor_grad_z) + 100 * dxkxy) / T.tile(\
          T.mean(Kxy, axis=2).dimshuffle(0, 1, 'x'), (1, 1, nz))
 
@@ -224,7 +210,6 @@ func_res_x, _ = conv_decoder(X, func_z, *dec_params)
 x_repeated = T.repeat(X, num_z, axis=0)
 x_dropout = dropout(x_repeated, p=drop_p)
 x_corrupt = T.clip(x_dropout, 1e-6, 1- 1e-6)
-# x_corrupt = x_dropout
 
 z = conv_encoder(x_corrupt, *enc_params)
 reconstructed_x, logpxz = conv_decoder(x_repeated, z, *dec_params)
@@ -264,7 +249,6 @@ print '%.2f seconds to compile theano functions'%(time()-t)
 
 
 n_updates = 0
-n_epochs = 0
 
 t = time()
 zmb = floatX(np_rng.normal(0, 1, size=(100, nz)))
@@ -293,7 +277,7 @@ for epoch in range(1, niter+niter_decay+1):
 
 
     if epoch == 1 or epoch % 100 == 0:
-        joblib.dump([p.get_value() for p in enc_params], 'models/%s/%d_en_params.jl'%(desc, n_epochs))
-        joblib.dump([p.get_value() for p in dec_params], 'models/%s/%d_de_params.jl'%(desc, n_epochs))
+        joblib.dump([p.get_value() for p in enc_params], 'models/%s/%d_en_params.jl'%(desc, epoch))
+        joblib.dump([p.get_value() for p in dec_params], 'models/%s/%d_de_params.jl'%(desc, epoch))
 
 
