@@ -5,6 +5,7 @@ We demonstrate two examples utilizing amortized SVGD in this repository:
 - Variational Autoencoder
 - Langevin Sampler 
 
+--------------
 
 ### Requirements
 - Theano
