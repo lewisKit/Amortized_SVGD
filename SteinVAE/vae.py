@@ -274,6 +274,7 @@ _train_g = theano.function([X], cost, updates = g_updates)
 _likelihood = theano.function([X], logpx)
 _encoder = theano.function([X], z)
 _decoder = theano.function([z], reconstructed_x)
+_reconstruct = theano.function([X], reconstructed_x)
 _marginal = theano.function([X], marginal_loglikelihood(X))
 print '%.2f seconds to compile theano functions'%(time()-t)
 
@@ -297,6 +298,8 @@ n_epochs = 0
 
 t = time()
 zmb = floatX(np_rng.normal(0, 1, size=(100, nz)))
+xmb = floatX(shuffle(X_test)[:100])
+
 for epoch in range(1, niter+niter_decay+1):
     X_train = shuffle(X_train)
 
@@ -313,8 +316,11 @@ for epoch in range(1, niter+niter_decay+1):
     print epoch, 'VLB', ll / ntrain / nbatch
 
 
-    samples = floatX(_decoder(zmb))
-    grayscale_grid_vis(inverse_transform(samples), (10, 10), 'samples/%s/%d.png'%(desc, epoch))
+    if epoch == 1 or epoch % 5 == 0:
+        samples = floatX(_decoder(zmb))
+        grayscale_grid_vis(inverse_transform(samples), (10, 10), 'images/%s/samples_%d.png'%(desc, epoch))
+        rec_x = _reconstruct(xmb)
+        grayscale_grid_vis(inverse_transform(rec_x), (10, 10), 'images/%s/rec_x%d.png'%(desc, epoch))
 
 
     if epoch == 1 or epoch % 50 == 0:

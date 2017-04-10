@@ -173,7 +173,7 @@ def svgd_gradient(xmb, ymb, theta, data_N):
     return grad, svgd_grad
 
 
-def langevin_network(xmb, ymb, Z, data_N, w_h1, gg1, gb1, w_h2, gg2, gb2, block):
+def langevin_sampler(xmb, ymb, Z, data_N, w_h1, gg1, gb1, w_h2, gg2, gb2, block):
 
     h1 = relu(batchnorm(T.dot(Z, w_h1), g=gg1, b=gb1))
     Z = (batchnorm(T.dot(h1, w_h2), g=gg2, b=gb2))
@@ -252,7 +252,7 @@ data_N = T.scalar('data_N')
 block = T.fmatrix()
 
 
-gX_1 = langevin_network(X, y, theta, data_N, *net_params)
+gX_1 = langevin_sampler(X, y, theta, data_N, *net_params)
 cost_1 = -1 * T.mean(T.sum(gX_1 * deltaX, axis=1))
 
 
