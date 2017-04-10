@@ -88,3 +88,9 @@ ENV/
 
 # mac
 .DS_Store
+
+# generate images and modesl
+images/
+models/
+
+
