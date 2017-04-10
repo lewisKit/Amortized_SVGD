@@ -12,7 +12,7 @@ We use the implementation of [Wu et al., 2017](https://github.com/tonywu95/eval_
 VAE | SteinVAE
 -------- | --------------------
 TestLL: -84.68 | Test LL: -84.31
-<img src="materials/vae_sample.png" width="100%"> | <img src="materials/steinvae_sample.png" width="100%">
+<img src="materials/vae_sample.png" width="120%"> | <img src="materials/steinvae_sample.png" width="120%">
 
 ## Langevin Sampler 
 
