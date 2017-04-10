@@ -5,7 +5,7 @@ We demonstrate two examples utilizing amortized SVGD in this repository:
 
 ## Variational Autoencoders
 
-We demonstrate we can draw samples from intractable posteriors by applying amortized svgd to train variational autoencoders with a non-Gaussian encoder, where we add dropout rate 0.3 noise in each layer of the encoder. The experiments shows that our method can capture the multimodal posterior due to the new structure. 
+We demonstrate we can draw samples from intractable posteriors by applying amortized svgd to train variational autoencoders with a non-Gaussian encoder, where we add dropout rate 0.3 noise in each layer. The experiments shows that our method can capture the multimodal posterior due to the new structure. 
 
 We use the implementation of [Wu et al., 2017](https://github.com/tonywu95/eval_gen) to evaluate the test log-likelihood.
 
