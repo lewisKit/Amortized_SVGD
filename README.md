@@ -11,6 +11,7 @@ We demonstrate two examples utilizing amortized SVGD in this repository:
 - pylearn2 
 - matplotlib
 - sklearn
+- tqdm
 
 ---
 ### Paper
