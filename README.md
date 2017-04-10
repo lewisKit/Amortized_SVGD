@@ -13,7 +13,7 @@ We demonstrate two examples utilizing amortized SVGD in this repository:
 - sklearn
 - tqdm
 
----
+
 ## Paper
 
 We would put the paper on Arxiv soon.
