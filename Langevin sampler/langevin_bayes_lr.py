@@ -24,11 +24,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.cross_validation import train_test_split
 from sklearn.utils import shuffle
 from sklearn.datasets import load_svmlight_file
+from scipy.io import savemat, loadmat
 
 
 '''
     Random seed
 '''
+
 seed = 42
 if "gpu" in theano.config.device:
     srng = theano.sandbox.cuda.rng_curand.CURAND_RandomStreams(seed=seed)
@@ -56,8 +58,20 @@ for i in range(1, 9):
 
     X_dev, y_dev = load_svmlight_file(name_dev, n_features=123, dtype=np.float32)
     X_test, y_test = load_svmlight_file(name_test, n_features=123, dtype=np.float32)
-    total_dev.append((floatX(X_dev.toarray()), floatX(y_dev)))
-    total_test.append((floatX(X_test.toarray()), floatX(y_test)))
+
+    if i < 3:
+        # make sure the data is big enough for inference
+        X_dev = X_dev.toarray()
+        X_dev = np.concatenate([X_dev, X_dev], axis=0)
+        y_dev = np.concatenate([y_dev, y_dev], axis=0)
+        total_dev.append((floatX(X_dev), floatX(y_dev)))
+        total_test.append((floatX(X_test.toarray()), floatX(y_test)))
+    else:
+        total_dev.append((floatX(X_dev.toarray()), floatX(y_dev)))
+        total_test.append((floatX(X_test.toarray()), floatX(y_test)))
+
+    print X_dev.shape
+    print y_dev.shape
 
 
 N_train = X_train.shape[0]
@@ -69,10 +83,10 @@ x_dim = X_train.shape[1]
 a0 = 1
 b0 = 0.1
 nbatch = 100
-lr = 5e-1
-l2 = 1e1
+lr = 5e-3
+l2 = 1e-2
 
-n_depth = 10
+n_depth =30
 
 relu = activations.Rectify()
 tanh = activations.Tanh()
@@ -95,9 +109,9 @@ gg3 = gain_ifn((npx,), 'gg3')
 gb3 = bias_ifn((npx,), 'gb3')
 
 
-block_1 = bias_ifn((n_depth, npx), 'block_1')
-net_params = [w_h1, gg1, gb1, w_h2, gg2, gb2, block_1]
-
+block_1 = gifn((n_depth, npx), 'block_1')
+# net_params = [w_h1, gg1, gb1, w_h2, gg2, gb2, block_1]
+net_params = [block_1]
 
 def rbf_kernel(X):
 
@@ -168,21 +182,20 @@ def svgd_gradient(xmb, ymb, theta, data_N):
     grad = score_bayes_lr(xmb, ymb, theta, data_N)
     kxy, dxkxy = rbf_kernel(theta)
 
-    svgd_grad = (T.dot(kxy, grad) + dxkxy) / T.sum(kxy, axis=1).dimshuffle(0, 'x')
+    svgd_grad = (T.dot(kxy, grad) + 100 * dxkxy) / T.sum(kxy, axis=1).dimshuffle(0, 'x')
 
     return grad, svgd_grad
 
+def langevin_sampler(xmb, ymb, Z, data_N, block ): # w_h1, gg1, gb1, w_h2, gg2, gb2, block):
 
-def langevin_sampler(xmb, ymb, Z, data_N, w_h1, gg1, gb1, w_h2, gg2, gb2, block):
-
-    h1 = relu(batchnorm(T.dot(Z, w_h1), g=gg1, b=gb1))
-    Z = (batchnorm(T.dot(h1, w_h2), g=gg2, b=gb2))
+    # h1 = relu(batchnorm(T.dot(Z, w_h1), g=gg1, b=gb1))
+    # Z = (batchnorm(T.dot(h1, w_h2), g=gg2, b=gb2))
 
     prior_samples = Z
 
     for i in range(n_depth):
         score_x = score_bayes_lr(xmb[i*nbatch:(i+1)*nbatch], ymb[i*nbatch:(i+1)*nbatch], prior_samples, data_N)
-        prior_samples = prior_samples + block[i]**2 * score_x / 2. + block[i]**2 * srng.normal(Z.shape)
+        prior_samples = prior_samples + block[i]**4 * score_x / 2. + block[i]**2 * srng.normal(Z.shape)
 
     return prior_samples
 
@@ -312,6 +325,7 @@ for data_i in range(0, 8):
     X_dev, y_dev = shuffle(X_dev, y_dev)
     X_test, y_test = shuffle(X_test, y_test)
     dev_N = X_dev.shape[0]
+    print "data size %d" %(dev_N)
 
 
     ### svgd
@@ -340,7 +354,6 @@ for data_i in range(0, 8):
     total_langevin_ll.append(lv_ll)
 
 
-    # langevin sampler
     imb_dev = np.random.choice(dev_N, min(n_depth * nbatch, dev_N), replace=False)
     xmb_dev, ymb_dev = floatX(X_dev[imb_dev]), floatX(y_dev[imb_dev])
     xmb_dev, ymb_dev = shuffle(xmb_dev, ymb_dev)
