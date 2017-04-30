@@ -83,8 +83,8 @@ x_dim = X_train.shape[1]
 a0 = 1
 b0 = 0.1
 nbatch = 100
-lr = 5e-3
-l2 = 1e-2
+lr = 5e-2
+l2 = 1e-3
 
 n_depth =30
 
